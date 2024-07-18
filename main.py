@@ -487,6 +487,28 @@ def list_files(path="."):
     except Exception as e:
         return f"Error listing files: {str(e)}"
 
+def generate_tree(path="."):
+    def _generate_tree(current_path, prefix=""):
+        contents = os.listdir(current_path)
+        pointers = ['├── '] * (len(contents) - 1) + ['└── ']
+
+        tree = []
+        for pointer, name in zip(pointers, contents):
+            tree.append(prefix + pointer + name)
+            subpath = os.path.join(current_path, name)
+            if os.path.isdir(subpath):
+                extension = '│   ' if pointer == '├── ' else '    '
+                tree.append(_generate_tree(subpath, prefix + extension))
+
+        return "\n".join(tree)
+
+    if not os.path.isdir(path):
+        return f"{path} is not a valid directory."
+    
+    return _generate_tree(path)
+
+    return "\n".join(tree)
+
 def tavily_search(query):
     try:
         response = tavily.qna_search(query=query, search_depth="advanced")
@@ -630,7 +652,20 @@ tools = [
     },
     {
         "name": "list_files",
-        "description": "List all files and directories in the specified folder. Use this when you need to see the contents of a directory.",
+        "description": "List all files and directories in the specified folder. Use this only when you need to see the contents of a specific directory without including its subdirectories.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "The path of the folder to list (default: current directory)"
+                }
+            }
+        }
+    },
+    {
+        "name": "generate_tree",
+        "description": "List all files and directories/subdirectories in the specified folder. Use this when you need to see the full contents of a directory.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -676,6 +711,8 @@ async def execute_tool(tool_name: str, tool_input: Dict[str, Any]) -> str:
             return read_file(tool_input["path"])
         elif tool_name == "list_files":
             return list_files(tool_input.get("path", "."))
+        elif tool_name == "generate_tree":
+            return generate_tree(tool_input.get("path", "."))
         elif tool_name == "tavily_search":
             return tavily_search(tool_input["query"])
         elif tool_name == "stop_process":

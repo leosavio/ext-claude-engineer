@@ -3,3 +3,4 @@ code_execution_env
 springboot-rest-actuator
 .envignore
 
+.env

@@ -8,3 +8,6 @@ prompt_toolkit
 pydub
 websockets
 SpeechRecognition
+
+ollama
+aiohttp

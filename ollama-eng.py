@@ -70,11 +70,11 @@ MAX_CONTEXT_TOKENS = 200000  # Reduced to 200k tokens for context window
 
 # Models
 # Models that maintain context memory across interactions
-MAINMODEL = "mistral-nemo"  # Maintains conversation history and file contents
+MAINMODEL = "mistral-nemo:12b"  # Maintains conversation history and file contents
 
 # Models that don't maintain context (memory is reset after each call)
-TOOLCHECKERMODEL = "mistral-nemo"
-CODEEDITORMODEL = "mistral-nemo"
+TOOLCHECKERMODEL = "mistral-nemo:12b"
+CODEEDITORMODEL = "mistral-nemo:12b"
 
 # System prompts
 BASE_SYSTEM_PROMPT = """

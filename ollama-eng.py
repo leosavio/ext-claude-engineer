@@ -283,10 +283,10 @@ def generate_and_apply_diff(original_content, new_content, path):
 async def generate_edit_instructions(file_path, file_content, instructions, project_context, full_file_contents):
     global code_editor_tokens, code_editor_memory, code_editor_files
     try:
-        # Prepare memory context (this is the only part that maintains some context between calls)
+        # Prepare memory context
         memory_context = "\n".join([f"Memory {i+1}:\n{mem}" for i, mem in enumerate(code_editor_memory)])
 
-        # Prepare full file contents context, excluding the file being edited if it's already in code_editor_files
+        # Prepare full file contents context
         full_file_contents_context = "\n\n".join([
             f"--- {path} ---\n{content}" for path, content in full_file_contents.items()
             if path != file_path or path not in code_editor_files
@@ -336,25 +336,25 @@ async def generate_edit_instructions(file_path, file_content, instructions, proj
         If no changes are needed, return an empty list.
         """
 
-        # Make the API call to CODEEDITORMODEL (context is not maintained except for code_editor_memory)
-        response = client.messages.create(
+        # Correct the API call for the AsyncClient
+        response = await client.chat(
             model=CODEEDITORMODEL,
-            max_tokens=8000,
-            system=system_prompt,
-            extra_headers={"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"},
             messages=[
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "Generate SEARCH/REPLACE blocks for the necessary changes."}
-            ]
+            ],
+            headers={"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
         )
-        # Update token usage for code editor
-        code_editor_tokens['input'] += response.usage.input_tokens
-        code_editor_tokens['output'] += response.usage.output_tokens
+
+        # Update token usage
+        code_editor_tokens['input'] += response['usage']['input_tokens']
+        code_editor_tokens['output'] += response['usage']['output_tokens']
 
         # Parse the response to extract SEARCH/REPLACE blocks
-        edit_instructions = parse_search_replace_blocks(response.content[0].text)
+        edit_instructions = parse_search_replace_blocks(response['choices'][0]['message']['content'])
 
-        # Update code editor memory (this is the only part that maintains some context between calls)
-        code_editor_memory.append(f"Edit Instructions for {file_path}:\n{response.content[0].text}")
+        # Update code editor memory
+        code_editor_memory.append(f"Edit Instructions for {file_path}:\n{response['choices'][0]['message']['content']}")
 
         # Add the file to code_editor_files set
         code_editor_files.add(file_path)
@@ -363,7 +363,9 @@ async def generate_edit_instructions(file_path, file_content, instructions, proj
 
     except Exception as e:
         console.print(f"Error in generating edit instructions: {str(e)}", style="bold red")
-        return []  # Return empty list if any exception occurs
+        return []  # Return an empty list if any exception occurs
+
+
 
 
 
@@ -930,10 +932,16 @@ async def chat_with_ollama(user_input, image_path=None, current_iteration=None, 
                 stream=False
             )
 
-            if isinstance(tool_response, dict) and 'message' in tool_response:
-                tool_checker_response = tool_response['message'].get('content', '')
-                console.print(Panel(Markdown(tool_checker_response), title="Ollama's Response to Tool Result",  title_align="left", border_style="blue", expand=False))
-                assistant_response += "\n\n" + tool_checker_response
+            if isinstance(tool_response, ollama._types.ChatResponse):
+                tool_checker_message = tool_response.message
+                if tool_checker_message:
+                    tool_checker_response = tool_checker_message.content
+                    console.print(Panel(Markdown(tool_checker_response), title="Ollama's Response to Tool Result", title_align="left", border_style="blue", expand=False))
+                    assistant_response += "\n\n" + tool_checker_response
+                else:
+                    error_message = "Unexpected tool response format: Missing message content"
+                    console.print(Panel(error_message, title="Error", style="bold red"))
+                    assistant_response += f"\n\n{error_message}"
             else:
                 error_message = "Unexpected tool response format"
                 console.print(Panel(error_message, title="Error", style="bold red"))
@@ -949,6 +957,7 @@ async def chat_with_ollama(user_input, image_path=None, current_iteration=None, 
     conversation_history = messages + [{"role": "assistant", "content": assistant_response}]
 
     return assistant_response, exit_continuation
+
 
 
 

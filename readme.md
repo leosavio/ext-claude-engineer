@@ -377,7 +377,11 @@ Command-R +
 Before running make sure you install the latest version of the Ollama app and 
 
 ```
-pip install ollama
+conda create -n olla-clau python=3.11
+
+conda activate olla-clau
+
+pip install -r requirements.txt
 ```
 
 Then

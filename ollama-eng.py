@@ -4,6 +4,7 @@ import json
 from tavily import TavilyClient
 import re
 import ollama
+from ollama import Client
 import asyncio
 import difflib
 import time
@@ -31,6 +32,8 @@ load_dotenv()
 
 # Initialize the Ollama client
 client = ollama.AsyncClient()
+
+
 
 # Initialize the Tavily client
 tavily_api_key = os.getenv("TAVILY_API_KEY")
@@ -65,16 +68,31 @@ running_processes = {}
 
 # Constants
 CONTINUATION_EXIT_PHRASE = "AUTOMODE_COMPLETE"
-MAX_CONTINUATION_ITERATIONS = 25
+MAX_CONTINUATION_ITERATIONS = 50
 MAX_CONTEXT_TOKENS = 200000  # Reduced to 200k tokens for context window
 
 # Models
 # Models that maintain context memory across interactions
-MAINMODEL = "mistral-nemo:12b"  # Maintains conversation history and file contents
+MAINMODEL = "ejschwar/llama3.2-better-prompts"  # Maintains conversation history and file contents
+
+# try:
+# #   ollama.chat(MAINMODEL)
+#   client = Client(
+#     host='http://localhost:11434',
+#     headers={'x-some-header': 'some-value'}
+#   )
+#   response = client.chat(model='llama3.2:3b', messages=[
+#   {
+#      'role': 'user',
+#      'content': 'Why is the sky blue?',
+#   },
+#   ])
+# except ollama.ResponseError as e:
+#   print('Error:', e.error)
 
 # Models that don't maintain context (memory is reset after each call)
-TOOLCHECKERMODEL = "mistral-nemo:12b"
-CODEEDITORMODEL = "mistral-nemo:12b"
+TOOLCHECKERMODEL = "ejschwar/llama3.2-better-prompts"
+CODEEDITORMODEL = "deepseek-r1:14b"
 
 # System prompts
 BASE_SYSTEM_PROMPT = """
@@ -807,24 +825,23 @@ async def chat_with_ollama(user_input, image_path=None, current_iteration=None, 
             tools=tools,
             stream=False
         )
-        
-        # Check if the response is a dictionary
-        if isinstance(response, dict):
-            if 'error' in response:
-                console.print(Panel(f"Error: {response['error']}", title="API Error", style="bold red"))
-                return f"I'm sorry, but there was an error with the model response: {response['error']}", False
-            elif 'message' in response:
-                assistant_message = response['message']
-                assistant_response = assistant_message.get('content', '')
+
+        print(response)
+
+        # Check if the response is a ChatResponse object
+        if isinstance(response, ollama._types.ChatResponse):
+            assistant_message = response.message
+            if assistant_message:
+                assistant_response = assistant_message.content
+                tool_calls = assistant_message.tool_calls or []
                 exit_continuation = CONTINUATION_EXIT_PHRASE in assistant_response
-                tool_calls = assistant_message.get('tool_calls', [])
             else:
-                # Handle unexpected dictionary response
-                console.print(Panel("Unexpected response format", title="API Error", style="bold red"))
+                console.print(Panel("Message content is missing in response", title="API Error", style="bold red"))
                 return "I'm sorry, but there was an unexpected error in the model response.", False
         else:
-            # Handle unexpected non-dictionary response
-            console.print(Panel("Unexpected response type", title="API Error", style="bold red"))
+            # Handle unexpected non-ChatResponse types
+            console.print(Panel(f"Unexpected response type: {type(response)}", title="API Error", style="bold red"))
+            print(f"Response type: {type(response)}, Response content: {response}")
             return "I'm sorry, but there was an unexpected error in the model response.", False
     except Exception as e:
         console.print(Panel(f"API Error: {str(e)}", title="API Error", style="bold red"))
@@ -833,8 +850,19 @@ async def chat_with_ollama(user_input, image_path=None, current_iteration=None, 
     console.print(Panel(Markdown(assistant_response), title="Ollama's Response", title_align="left", border_style="blue", expand=False))
 
     if tool_calls:
+        # Convert tool_calls to a serializable format
+        def serialize_tool_call(tool_call):
+            return {
+                "function": {
+                    "name": tool_call.function.name,
+                    "arguments": tool_call.function.arguments
+                }
+            }
+
+        serializable_tool_calls = [serialize_tool_call(tc) for tc in tool_calls]
+        
         console.print(Panel("Tool calls detected", title="Tool Usage", style="bold yellow"))
-        console.print(Panel(json.dumps(tool_calls, indent=2), title="Tool Calls", style="cyan"))
+        console.print(Panel(json.dumps(serializable_tool_calls, indent=2), title="Tool Calls", style="cyan"))
 
     # Display files in context
     if file_contents:
@@ -921,6 +949,8 @@ async def chat_with_ollama(user_input, image_path=None, current_iteration=None, 
     conversation_history = messages + [{"role": "assistant", "content": assistant_response}]
 
     return assistant_response, exit_continuation
+
+
 
 def reset_code_editor_memory():
     global code_editor_memory

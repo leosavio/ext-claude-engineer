@@ -397,3 +397,17 @@ Be extra careful if you ever let these local models run code on your machine, es
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Doriandarko/claude-engineer&type=Date)](https://star-history.com/#Doriandarko/claude-engineer&Date)
+
+
+
+
+
+To think and evolute
+Available Functions:                                                                                                                                     │
+│     • create_folder: Requires a path where a new folder should be created.                                                                                  │
+│     • create_file: Needs both a path and content for creating a file.                                                                                       │
+│     • edit_and_apply: Demands a path, instructions, and project context to edit a file.                                                                     │
+│     • read_file: Only needs a path to read the contents of a file.                                                                                          │
+│     • read_multiple_files: Requires an array of paths to read multiple files.                                                                               │
+│     • list_files: Needs a path to list all files in a folder.                                                                                               │
+│     • tavily_search: Requires a search query.      

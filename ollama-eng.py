@@ -73,7 +73,7 @@ MAX_CONTEXT_TOKENS = 200000  # Reduced to 200k tokens for context window
 
 # Models
 # Models that maintain context memory across interactions
-MAINMODEL = "ejschwar/llama3.2-better-prompts"  # Maintains conversation history and file contents
+MAINMODEL = "jacob-ebey/phi4-tools" #ejschwar/llama3.2-better-prompts"  # Maintains conversation history and file contents
 
 # try:
 # #   ollama.chat(MAINMODEL)
@@ -91,7 +91,7 @@ MAINMODEL = "ejschwar/llama3.2-better-prompts"  # Maintains conversation history
 #   print('Error:', e.error)
 
 # Models that don't maintain context (memory is reset after each call)
-TOOLCHECKERMODEL = "ejschwar/llama3.2-better-prompts"
+TOOLCHECKERMODEL = "jacob-ebey/phi4-tools" #"ejschwar/llama3.2-better-prompts"
 CODEEDITORMODEL = "deepseek-r1:14b"
 
 # System prompts
@@ -283,6 +283,24 @@ def generate_and_apply_diff(original_content, new_content, path):
 async def generate_edit_instructions(file_path, file_content, instructions, project_context, full_file_contents):
     global code_editor_tokens, code_editor_memory, code_editor_files
     try:
+        # Debug prints to identify issues
+        print("Debug: Starting generate_edit_instructions")
+        print(f"Debug: file_path={file_path}, instructions={instructions}, project_context={project_context}")
+        print(f"Debug: code_editor_tokens={globals().get('code_editor_tokens', 'NOT DEFINED')}")
+
+        # Ensure global variables are defined
+        if 'code_editor_tokens' not in globals():
+            code_editor_tokens = {'input': 0, 'output': 0}
+            print("Debug: Initialized code_editor_tokens")
+
+        if 'code_editor_memory' not in globals():
+            code_editor_memory = []
+            print("Debug: Initialized code_editor_memory")
+
+        if 'code_editor_files' not in globals():
+            code_editor_files = set()
+            print("Debug: Initialized code_editor_files")
+
         # Prepare memory context
         memory_context = "\n".join([f"Memory {i+1}:\n{mem}" for i, mem in enumerate(code_editor_memory)])
 
@@ -342,19 +360,31 @@ async def generate_edit_instructions(file_path, file_content, instructions, proj
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "Generate SEARCH/REPLACE blocks for the necessary changes."}
-            ],
-            headers={"anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"}
+            ]
         )
 
-        # Update token usage
-        code_editor_tokens['input'] += response['usage']['input_tokens']
-        code_editor_tokens['output'] += response['usage']['output_tokens']
+        # Debug: Print the response structure
+        print("Debug: Response structure:", response)
+
+        # Update token usage if 'usage' key exists in response
+        if response and isinstance(response, dict):
+            usage = response.get('usage', {})
+            code_editor_tokens['input'] += usage.get('input_tokens', 0)
+            code_editor_tokens['output'] += usage.get('output_tokens', 0)
+            print("Debug: Updated token usage")
+        else:
+            print("Debug: No usage information in response")
 
         # Parse the response to extract SEARCH/REPLACE blocks
-        edit_instructions = parse_search_replace_blocks(response['choices'][0]['message']['content'])
+        if hasattr(response, 'message') and response.message:
+            response_content = response.message.content
+            print("Debug: Extracted response content:", response_content)
+            edit_instructions = parse_search_replace_blocks(response_content)
+        else:
+            raise ValueError("Response does not contain valid message content.")
 
         # Update code editor memory
-        code_editor_memory.append(f"Edit Instructions for {file_path}:\n{response['choices'][0]['message']['content']}")
+        code_editor_memory.append(f"Edit Instructions for {file_path}:{response_content}")
 
         # Add the file to code_editor_files set
         code_editor_files.add(file_path)
@@ -362,8 +392,15 @@ async def generate_edit_instructions(file_path, file_content, instructions, proj
         return edit_instructions
 
     except Exception as e:
+        print(f"Debug: Exception occurred: {e}")
         console.print(f"Error in generating edit instructions: {str(e)}", style="bold red")
         return []  # Return an empty list if any exception occurs
+
+
+
+
+
+
 
 
 
